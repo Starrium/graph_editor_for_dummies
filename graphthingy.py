@@ -7,7 +7,9 @@ from collections import deque
 import math
 
 pygame.init()
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1000, 600  # Increased width for side panel
+GRAPH_WIDTH = 700  # Width reserved for graph
+PANEL_WIDTH = 300  # Width for stack/queue panel
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("totally beginner friendly graph editor")
 clock = pygame.time.Clock()
@@ -23,6 +25,7 @@ is_directed = False  # Toggle for directed/undirected graph
 RADIUS = 20
 FONT = pygame.font.SysFont(None, 24)
 BUTTON_FONT = pygame.font.SysFont(None, 22)
+SMALL_FONT = pygame.font.SysFont(None, 18)
 
 # setup UI buttons
 export_button = pygame.Rect(10, 10, 80, 30)
@@ -32,12 +35,13 @@ bfs_button = pygame.Rect(280, 10, 80, 30)
 step_button = pygame.Rect(370, 10, 80, 30)
 reset_button = pygame.Rect(460, 10, 80, 30)
 autoplay_button = pygame.Rect(550, 10, 100, 30)
-toggle_button = pygame.Rect(660, 10, 110, 30)  # New toggle button
-clear_button = pygame.Rect(WIDTH - 90, HEIGHT - 40, 80, 30)  # Bottom right corner
+toggle_button = pygame.Rect(10, 50, 110, 30)
+clear_button = pygame.Rect(GRAPH_WIDTH - 90, HEIGHT - 40, 80, 30)
 
 # animation status
 algo_running = None
 algo_state = []
+algo_data_structure_states = []  # Store stack/queue state at each step
 algo_index = 0
 algo_paused = True
 autoplay_active = False
@@ -95,7 +99,7 @@ def load_graph():
 def get_node_at(pos):
     mx, my = pos
     for n, (x, y) in nodes.items():
-        if (mx - x) ** 2 + (my - y) ** 2 < RADIUS ** 2:
+        if mx < GRAPH_WIDTH and (mx - x) ** 2 + (my - y) ** 2 < RADIUS ** 2:
             return n
     return None
 
@@ -111,7 +115,6 @@ def draw_button(rect, text, active=False):
 
 def draw_arrow(surface, color, start, end, width=2):
     """Draw an arrow from start to end position"""
-    # Calculate direction vector
     dx = end[0] - start[0]
     dy = end[1] - start[1]
     distance = math.sqrt(dx ** 2 + dy ** 2)
@@ -119,24 +122,19 @@ def draw_arrow(surface, color, start, end, width=2):
     if distance == 0:
         return
 
-    # Normalize direction
     dx /= distance
     dy /= distance
 
-    # Shorten the line to end at the circle edge
     end_x = end[0] - dx * RADIUS
     end_y = end[1] - dy * RADIUS
     start_x = start[0] + dx * RADIUS
     start_y = start[1] + dy * RADIUS
 
-    # Draw main line
     pygame.draw.line(surface, color, (start_x, start_y), (end_x, end_y), width)
 
-    # Draw arrowhead
     arrow_size = 12
     angle = math.atan2(dy, dx)
 
-    # Calculate arrowhead points
     left_x = end_x - arrow_size * math.cos(angle - math.pi / 6)
     left_y = end_y - arrow_size * math.sin(angle - math.pi / 6)
     right_x = end_x - arrow_size * math.cos(angle + math.pi / 6)
@@ -145,13 +143,12 @@ def draw_arrow(surface, color, start, end, width=2):
     pygame.draw.polygon(surface, color, [(end_x, end_y), (left_x, left_y), (right_x, right_y)])
 
 
-# basic algorithms (for now)
 def get_neighbors(node):
     neighbors = []
     for u, v in edges:
         if u == node:
             neighbors.append(v)
-        elif not is_directed and v == node:  # Only consider reverse direction if undirected
+        elif not is_directed and v == node:
             neighbors.append(u)
     return neighbors
 
@@ -160,6 +157,10 @@ def dfs(start):
     visited = []
     stack = [(start, None)]
     seen = set()
+    ds_states = []  # Data structure states
+
+    # Initial state
+    ds_states.append(list(stack))
 
     while stack:
         node, edge = stack.pop()
@@ -169,13 +170,20 @@ def dfs(start):
             for neighbor in get_neighbors(node):
                 if neighbor not in seen:
                     stack.append((neighbor, (node, neighbor)))
-    return visited
+        # Capture state after each operation
+        ds_states.append(list(stack))
+
+    return visited, ds_states
 
 
 def bfs(start):
     visited = []
     queue = deque([(start, None)])
     seen = set([start])
+    ds_states = []  # Data structure states
+
+    # Initial state
+    ds_states.append(list(queue))
 
     while queue:
         node, edge = queue.popleft()
@@ -184,14 +192,115 @@ def bfs(start):
             if neighbor not in seen:
                 seen.add(neighbor)
                 queue.append((neighbor, (node, neighbor)))
-    return visited
+        # Capture state after each operation
+        ds_states.append(list(queue))
+
+    return visited, ds_states
 
 
-# resetting function after animation
+def draw_data_structure_panel():
+    """Draw the stack/queue visualization panel on the right side"""
+    panel_x = GRAPH_WIDTH
+
+    # Draw panel background
+    pygame.draw.rect(screen, (40, 40, 40), (panel_x, 0, PANEL_WIDTH, HEIGHT))
+    pygame.draw.line(screen, (100, 100, 100), (panel_x, 0), (panel_x, HEIGHT), 2)
+
+    if not algo_running or algo_index == 0:
+        return
+
+    # Get current data structure state
+    current_state = algo_data_structure_states[min(algo_index, len(algo_data_structure_states) - 1)]
+
+    # Draw title
+    title = "Stack" if algo_running == "DFS" else "Queue"
+    title_label = FONT.render(title, True, (255, 255, 255))
+    screen.blit(title_label, (panel_x + 10, 10))
+
+    # Draw data structure visualization
+    start_y = 50
+    item_height = 35
+    item_width = PANEL_WIDTH - 40
+
+    if algo_running == "DFS":
+        # Draw stack (top to bottom, last element at top)
+        stack_label = SMALL_FONT.render("Top", True, (150, 150, 150))
+        screen.blit(stack_label, (panel_x + 15, start_y))
+
+        y_offset = start_y + 25
+        for i in range(len(current_state) - 1, -1, -1):
+            node, edge = current_state[i]
+
+            # Draw stack item box
+            rect = pygame.Rect(panel_x + 20, y_offset, item_width, item_height)
+
+            # Color code: lighter at top
+            color_intensity = 60 + (len(current_state) - i) * 15
+            color_intensity = min(color_intensity, 150)
+            pygame.draw.rect(screen, (color_intensity, color_intensity, 100), rect)
+            pygame.draw.rect(screen, (200, 200, 200), rect, 2)
+
+            # Draw node label
+            node_text = f"Node: {node}"
+            node_label = SMALL_FONT.render(node_text, True, (255, 255, 255))
+            screen.blit(node_label, (rect.x + 10, rect.y + 8))
+
+            y_offset += item_height + 5
+
+            if y_offset > HEIGHT - 60:
+                overflow_text = f"... +{len(current_state) - (len(current_state) - i)} more"
+                overflow_label = SMALL_FONT.render(overflow_text, True, (200, 200, 200))
+                screen.blit(overflow_label, (panel_x + 20, y_offset))
+                break
+
+        if len(current_state) > 0:
+            bottom_label = SMALL_FONT.render("Bottom", True, (150, 150, 150))
+            screen.blit(bottom_label, (panel_x + 15, min(y_offset, HEIGHT - 45)))
+
+    else:  # BFS - Queue
+        # Draw queue (front to back)
+        front_label = SMALL_FONT.render("Front", True, (150, 150, 150))
+        screen.blit(front_label, (panel_x + 15, start_y))
+
+        y_offset = start_y + 25
+        for i, (node, edge) in enumerate(current_state):
+            # Draw queue item box
+            rect = pygame.Rect(panel_x + 20, y_offset, item_width, item_height)
+
+            # Color code: lighter at front
+            color_intensity = 150 - i * 15
+            color_intensity = max(color_intensity, 60)
+            pygame.draw.rect(screen, (100, color_intensity, color_intensity), rect)
+            pygame.draw.rect(screen, (200, 200, 200), rect, 2)
+
+            # Draw node label
+            node_text = f"Node: {node}"
+            node_label = SMALL_FONT.render(node_text, True, (255, 255, 255))
+            screen.blit(node_label, (rect.x + 10, rect.y + 8))
+
+            y_offset += item_height + 5
+
+            if y_offset > HEIGHT - 60:
+                overflow_text = f"... +{len(current_state) - i - 1} more"
+                overflow_label = SMALL_FONT.render(overflow_text, True, (200, 200, 200))
+                screen.blit(overflow_label, (panel_x + 20, y_offset))
+                break
+
+        if len(current_state) > 0:
+            back_label = SMALL_FONT.render("Back", True, (150, 150, 150))
+            screen.blit(back_label, (panel_x + 15, min(y_offset, HEIGHT - 45)))
+
+    # Draw size info
+    size_text = f"Size: {len(current_state)}"
+    size_label = SMALL_FONT.render(size_text, True, (200, 200, 200))
+    screen.blit(size_label, (panel_x + PANEL_WIDTH - 80, 15))
+
+
 def reset_algo_state():
-    global algo_running, algo_state, algo_index, algo_paused, start_node, autoplay_active, animation_counter
+    global algo_running, algo_state, algo_data_structure_states, algo_index, algo_paused, start_node, autoplay_active, animation_counter
     algo_running = None
     algo_state = []
+    algo_data_structure_states = []
     algo_index = 0
     algo_paused = True
     autoplay_active = False
@@ -220,7 +329,6 @@ while True:
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left click
-                # check clicks on function
                 if export_button.collidepoint(event.pos):
                     save_graph()
                     continue
@@ -235,7 +343,7 @@ while True:
                     if nodes and not algo_running:
                         start_node = min(nodes.keys())
                         algo_running = "DFS"
-                        algo_state = dfs(start_node)
+                        algo_state, algo_data_structure_states = dfs(start_node)
                         algo_index = 0
                         algo_paused = True
                     continue
@@ -243,14 +351,14 @@ while True:
                     if nodes and not algo_running:
                         start_node = min(nodes.keys())
                         algo_running = "BFS"
-                        algo_state = bfs(start_node)
+                        algo_state, algo_data_structure_states = bfs(start_node)
                         algo_index = 0
                         algo_paused = True
                     continue
                 elif step_button.collidepoint(event.pos):
                     if algo_running and algo_index < len(algo_state):
                         algo_index += 1
-                        autoplay_active = False  # Stop autoplay when manually stepping
+                        autoplay_active = False
                     continue
                 elif autoplay_button.collidepoint(event.pos):
                     if algo_running:
@@ -264,7 +372,7 @@ while True:
                     continue
 
                 # Graph interaction
-                if not algo_running:
+                if not algo_running and event.pos[0] < GRAPH_WIDTH:
                     node = get_node_at(event.pos)
                     mods = pygame.key.get_mods()
 
@@ -296,8 +404,6 @@ while True:
                         else:
                             if node != selected_node:
                                 edge = (selected_node, node)
-                                # For directed graphs, allow duplicate edges in different directions
-                                # For undirected, check both directions
                                 if is_directed:
                                     if edge not in edges:
                                         edges.append(edge)
@@ -308,7 +414,7 @@ while True:
                             selected_node = None
 
             elif event.button == 3:  # Right click to delete nodes
-                if not algo_running:
+                if not algo_running and event.pos[0] < GRAPH_WIDTH:
                     node = get_node_at(event.pos)
                     if node is not None:
                         edges = [(u, v) for (u, v) in edges if u != node and v != node]
@@ -325,7 +431,8 @@ while True:
 
         elif event.type == pygame.MOUSEMOTION:
             if dragging_node is not None and not algo_running:
-                nodes[dragging_node] = event.pos
+                if event.pos[0] < GRAPH_WIDTH:
+                    nodes[dragging_node] = event.pos
 
     # Autoplay logic
     if autoplay_active and algo_running and algo_index < len(algo_state):
@@ -348,8 +455,6 @@ while True:
     draw_button(autoplay_button, "Autoplay", autoplay_active)
     draw_button(reset_button, "Reset")
     draw_button(toggle_button, "Directed" if is_directed else "Undirected", is_directed)
-
-    # Draw clear button in bottom right
     draw_button(clear_button, "Clear All")
 
     # draw edges
@@ -382,6 +487,9 @@ while True:
         pygame.draw.circle(screen, color, (x, y), RADIUS)
         label = FONT.render(str(n), True, (0, 0, 0))
         screen.blit(label, (x - label.get_width() // 2, y - label.get_height() // 2))
+
+    # Draw stack/queue panel
+    draw_data_structure_panel()
 
     if algo_running:
         step_text = f"Steps: {algo_index} / {len(algo_state)}"
