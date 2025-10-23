@@ -45,7 +45,7 @@ algo_data_structure_states = []  # Store stack/queue state at each step
 algo_index = 0
 algo_paused = True
 autoplay_active = False
-animation_speed = 10  # frames per step (lower = faster)
+animation_speed = 30  # frames per step (lower = faster)
 animation_counter = 0
 start_node = None
 
@@ -206,7 +206,100 @@ def draw_data_structure_panel():
     pygame.draw.rect(screen, (40, 40, 40), (panel_x, 0, PANEL_WIDTH, HEIGHT))
     pygame.draw.line(screen, (100, 100, 100), (panel_x, 0), (panel_x, HEIGHT), 2)
 
-    if not algo_running or algo_index == 0:
+    if not algo_running:
+        return
+
+    # Split panel into two sections
+    split_y = HEIGHT // 2
+
+    # Draw visited nodes section (top half)
+    draw_visited_nodes_section(panel_x, 0, PANEL_WIDTH, split_y)
+
+    # Draw separator line
+    pygame.draw.line(screen, (100, 100, 100), (panel_x, split_y), (panel_x + PANEL_WIDTH, split_y), 2)
+
+    # Draw stack/queue section (bottom half)
+    draw_stack_queue_section(panel_x, split_y, PANEL_WIDTH, HEIGHT - split_y)
+
+
+def draw_visited_nodes_section(x, y, width, height):
+    """Draw the visited nodes list in the top section"""
+    # Draw title
+    title = "Visited Order"
+    title_label = FONT.render(title, True, (255, 255, 255))
+    screen.blit(title_label, (x + 10, y + 10))
+
+    # Get visited nodes up to current step
+    visited_nodes = [algo_state[i][0] for i in range(min(algo_index, len(algo_state)))]
+
+    if not visited_nodes:
+        no_data_label = SMALL_FONT.render("No nodes visited yet", True, (150, 150, 150))
+        screen.blit(no_data_label, (x + 10, y + 45))
+        return
+
+    # Draw visited nodes as a flowing list
+    start_y = y + 45
+    current_x = x + 10
+    current_y = start_y
+    max_width = width - 20
+    node_box_width = 35
+    node_box_height = 30
+    spacing = 8
+
+    for i, node in enumerate(visited_nodes):
+        # Check if we need to wrap to next line
+        if current_x + node_box_width > x + max_width:
+            current_x = x + 10
+            current_y += node_box_height + spacing
+
+        # Check if we're out of space
+        if current_y + node_box_height > y + height - 10:
+            # Draw overflow indicator
+            overflow_text = f"+{len(visited_nodes) - i}"
+            overflow_label = SMALL_FONT.render(overflow_text, True, (200, 200, 200))
+            screen.blit(overflow_label, (current_x, current_y))
+            break
+
+        # Draw node box
+        rect = pygame.Rect(current_x, current_y, node_box_width, node_box_height)
+
+        # Color based on recency (more recent = brighter)
+        brightness = 80 + int((i / len(visited_nodes)) * 120)
+        pygame.draw.rect(screen, (brightness, brightness, 200), rect)
+        pygame.draw.rect(screen, (200, 200, 200), rect, 2)
+
+        # Draw node number
+        node_text = str(node)
+        node_label = SMALL_FONT.render(node_text, True, (0, 0, 0))
+        text_x = current_x + (node_box_width - node_label.get_width()) // 2
+        text_y = current_y + (node_box_height - node_label.get_height()) // 2
+        screen.blit(node_label, (text_x, text_y))
+
+        # Draw arrow to next node (if not last)
+        if i < len(visited_nodes) - 1:
+            arrow_x = current_x + node_box_width + 2
+            arrow_y = current_y + node_box_height // 2
+            pygame.draw.line(screen, (150, 150, 150),
+                             (arrow_x, arrow_y),
+                             (arrow_x + spacing - 4, arrow_y), 2)
+            # Arrow head
+            pygame.draw.polygon(screen, (150, 150, 150), [
+                (arrow_x + spacing - 4, arrow_y),
+                (arrow_x + spacing - 7, arrow_y - 3),
+                (arrow_x + spacing - 7, arrow_y + 3)
+            ])
+
+        current_x += node_box_width + spacing
+
+    # Draw count
+    count_text = f"Total: {len(visited_nodes)}"
+    count_label = SMALL_FONT.render(count_text, True, (200, 200, 200))
+    screen.blit(count_label, (x + width - count_label.get_width() - 10, y + 15))
+
+
+def draw_stack_queue_section(x, y, width, height):
+    """Draw the stack/queue visualization in the bottom section"""
+    if algo_index == 0:
         return
 
     # Get current data structure state
@@ -215,24 +308,24 @@ def draw_data_structure_panel():
     # Draw title
     title = "Stack" if algo_running == "DFS" else "Queue"
     title_label = FONT.render(title, True, (255, 255, 255))
-    screen.blit(title_label, (panel_x + 10, 10))
+    screen.blit(title_label, (x + 10, y + 10))
 
     # Draw data structure visualization
-    start_y = 50
+    start_y = y + 50
     item_height = 35
-    item_width = PANEL_WIDTH - 40
+    item_width = width - 40
 
     if algo_running == "DFS":
         # Draw stack (top to bottom, last element at top)
         stack_label = SMALL_FONT.render("Top", True, (150, 150, 150))
-        screen.blit(stack_label, (panel_x + 15, start_y))
+        screen.blit(stack_label, (x + 15, start_y))
 
         y_offset = start_y + 25
         for i in range(len(current_state) - 1, -1, -1):
             node, edge = current_state[i]
 
             # Draw stack item box
-            rect = pygame.Rect(panel_x + 20, y_offset, item_width, item_height)
+            rect = pygame.Rect(x + 20, y_offset, item_width, item_height)
 
             # Color code: lighter at top
             color_intensity = 60 + (len(current_state) - i) * 15
@@ -247,25 +340,25 @@ def draw_data_structure_panel():
 
             y_offset += item_height + 5
 
-            if y_offset > HEIGHT - 60:
+            if y_offset > y + height - 60:
                 overflow_text = f"... +{len(current_state) - (len(current_state) - i)} more"
                 overflow_label = SMALL_FONT.render(overflow_text, True, (200, 200, 200))
-                screen.blit(overflow_label, (panel_x + 20, y_offset))
+                screen.blit(overflow_label, (x + 20, y_offset))
                 break
 
         if len(current_state) > 0:
             bottom_label = SMALL_FONT.render("Bottom", True, (150, 150, 150))
-            screen.blit(bottom_label, (panel_x + 15, min(y_offset, HEIGHT - 45)))
+            screen.blit(bottom_label, (x + 15, min(y_offset, y + height - 15)))
 
     else:  # BFS - Queue
         # Draw queue (front to back)
         front_label = SMALL_FONT.render("Front", True, (150, 150, 150))
-        screen.blit(front_label, (panel_x + 15, start_y))
+        screen.blit(front_label, (x + 15, start_y))
 
         y_offset = start_y + 25
         for i, (node, edge) in enumerate(current_state):
             # Draw queue item box
-            rect = pygame.Rect(panel_x + 20, y_offset, item_width, item_height)
+            rect = pygame.Rect(x + 20, y_offset, item_width, item_height)
 
             # Color code: lighter at front
             color_intensity = 150 - i * 15
@@ -280,20 +373,20 @@ def draw_data_structure_panel():
 
             y_offset += item_height + 5
 
-            if y_offset > HEIGHT - 60:
+            if y_offset > y + height - 60:
                 overflow_text = f"... +{len(current_state) - i - 1} more"
                 overflow_label = SMALL_FONT.render(overflow_text, True, (200, 200, 200))
-                screen.blit(overflow_label, (panel_x + 20, y_offset))
+                screen.blit(overflow_label, (x + 20, y_offset))
                 break
 
         if len(current_state) > 0:
             back_label = SMALL_FONT.render("Back", True, (150, 150, 150))
-            screen.blit(back_label, (panel_x + 15, min(y_offset, HEIGHT - 45)))
+            screen.blit(back_label, (x + 15, min(y_offset, y + height - 15)))
 
     # Draw size info
     size_text = f"Size: {len(current_state)}"
     size_label = SMALL_FONT.render(size_text, True, (200, 200, 200))
-    screen.blit(size_label, (panel_x + PANEL_WIDTH - 80, 15))
+    screen.blit(size_label, (x + width - 80, y + 15))
 
 
 def reset_algo_state():
