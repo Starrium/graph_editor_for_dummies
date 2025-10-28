@@ -54,11 +54,11 @@ for i, m in enumerate(matches):
 
 print(f"✅ Detected {len(questions)} questions in file.")
 
-# Select random 45 questions
+# Select random n questions
 if len(questions) < NUM_QUESTIONS:
     raise ValueError("Not enough questions to build full test!")
 
-random.seed(random.randint(1, 100))
+seed = random.seed(random.randint(1, 100))
 selected = random.sample(questions, NUM_QUESTIONS)
 
 # ============================================
@@ -73,7 +73,7 @@ y = top
 c.setFont(font_name, 16)
 c.drawString(left, y, "ĐỀ LUYỆN TẬP TRIẾT HỌC (45 CÂU TRẮC NGHIỆM)")
 c.setFont(font_name, 11)
-c.drawString(left, y - 14, "Renumbered 1–45 (original question numbers in parentheses)")
+c.drawString(left, y - 14, f"Renumbered 1–45 (original question numbers in parentheses) Test seed = {seed}")
 y -= 36
 
 c.setFont(font_name, 12)
