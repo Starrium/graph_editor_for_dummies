@@ -58,7 +58,8 @@ print(f"✅ Detected {len(questions)} questions in file.")
 if len(questions) < NUM_QUESTIONS:
     raise ValueError("Not enough questions to build full test!")
 
-seed = random.seed(random.randint(1, 100))
+seed = random.randint(1, 100)
+random.seed(seed)
 selected = random.sample(questions, NUM_QUESTIONS)
 
 # ============================================
@@ -71,9 +72,9 @@ top = height - 20 * mm
 y = top
 
 c.setFont(font_name, 16)
-c.drawString(left, y, "ĐỀ LUYỆN TẬP TRIẾT HỌC (45 CÂU TRẮC NGHIỆM)")
+c.drawString(left, y, "ĐỀ LUYỆN TẬP TRIẾT HỌC")
 c.setFont(font_name, 11)
-c.drawString(left, y - 14, f"Renumbered 1–45 (original question numbers in parentheses) Test seed = {seed}")
+c.drawString(left, y - 14, f"Renumbered 1–{NUM_QUESTIONS} (original question numbers in parentheses) Test seed = {seed}")
 y -= 36
 
 c.setFont(font_name, 12)
